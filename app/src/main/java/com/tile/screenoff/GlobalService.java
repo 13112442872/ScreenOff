@@ -90,7 +90,9 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
                     break;
                 case Intent.ACTION_SCREEN_OFF:
                     try {
-                         iScreenOff.updateNowScreenState(false);
+                        if (iScreenOff != null) {
+                            iScreenOff.updateNowScreenState(false);
+                        }
                     } catch (RemoteException e) {
                         e.printStackTrace();
                     }
@@ -101,7 +103,9 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
                 case Intent.ACTION_SCREEN_ON:
                 case Intent.ACTION_USER_PRESENT:
                     try {
-                        iScreenOff.updateNowScreenState(true);
+                        if (iScreenOff != null) {
+                            iScreenOff.updateNowScreenState(true);
+                        }
                     } catch (RemoteException e) {
                         e.printStackTrace();
                     }
@@ -283,6 +287,7 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
 
     void screenoff(Boolean bb) {
         try {
+            if (iScreenOff == null) return;
             if (iScreenOff.getNowScreenState() == 0) return;
             iScreenOff.setPowerMode(bb);
             view.setKeepScreenOn(bb);
@@ -300,6 +305,7 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
             return super.onKeyEvent(event);
 
         try {
+            if (iScreenOff == null) return super.onKeyEvent(event);
             final int keycode = event.getKeyCode();
             final int nowState = iScreenOff.getNowScreenState();
             if (keycode == scrOffKey && nowState == 1) {
@@ -396,7 +402,18 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
 
             @Override
             public void onResponseSent() {
-                server.restart();
+                // 响应发送后重启服务器，确保每次都是新连接
+                // 这样可以避免浏览器缓存和连接问题
+                if (server != null) {
+                    new Thread(() -> {
+                        try {
+                            Thread.sleep(100); // 短暂延迟确保响应完全发送
+                            server.restart();
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                    }).start();
+                }
             }
 
         }, port);
@@ -420,22 +437,26 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
         } else if (target.equals("/favicon.ico")) {
             outputPng(Objects.requireNonNull(loadBinary("favicon.png")));
         } else {
-            try {
-                switch (target.substring(0, 3)) {
-                    case "/1?":
-                        iScreenOff.setPowerMode(false);
-                        outputHtml("", "200 OK");
-                        break;
-                    case "/2?":
-                        iScreenOff.setPowerMode(true);
-                        outputHtml("", "200 OK");
-                        break;
-                    default:
-                        outputHtml(build404Html(), "404 Not Found");
-                        break;
+                try {
+                    if (iScreenOff == null) {
+                        outputHtml("服务未连接", "503 Service Unavailable");
+                        return;
+                    }
+                    switch (target.substring(0, 3)) {
+                        case "/1?":
+                            iScreenOff.setPowerMode(false);
+                            outputHtml("", "200 OK");
+                            break;
+                        case "/2?":
+                            iScreenOff.setPowerMode(true);
+                            outputHtml("", "200 OK");
+                            break;
+                        default:
+                            outputHtml(build404Html(), "404 Not Found");
+                            break;
+                    }
+                } catch (Exception ignored) {
                 }
-            } catch (Exception ignored) {
-            }
 
         }
     }
@@ -443,28 +464,40 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
     private String buildIndexHtml(HttpRequest request) {
         String nowState = "未知";
         try {
-            switch (iScreenOff.getNowScreenState()) {
-                case 0:
-                    nowState = "息屏";
-                    break;
-                case 1:
-                    nowState = "亮屏";
-                    break;
-                default:
-                    nowState = "息屏运行";
-                    break;
+            if (iScreenOff != null) {
+                switch (iScreenOff.getNowScreenState()) {
+                    case 0:
+                        nowState = "息屏";
+                        break;
+                    case 1:
+                        nowState = "亮屏";
+                        break;
+                    default:
+                        nowState = "息屏运行";
+                        break;
+                }
+            } else {
+                nowState = "服务未连接";
             }
         } catch (RemoteException e) {
             e.printStackTrace();
         }
-        return Objects.requireNonNull(loadHtml("index.html"))
+        String htmlTemplate = loadHtml("index.html");
+        if (htmlTemplate == null) {
+            return "<!DOCTYPE html><html><head><title>错误</title></head><body><h1>页面加载失败</h1><p>无法加载HTML模板文件</p></body></html>";
+        }
+        return htmlTemplate
                 .replace("{{brand}}", Build.BRAND)
                 .replace("{{device}}", Build.MODEL + " Android " + Build.VERSION.RELEASE)
                 .replace("{{state}}", nowState);
     }
 
     private String build404Html() {
-        return loadHtml("404.html");
+        String html404 = loadHtml("404.html");
+        if (html404 == null) {
+            return "<!DOCTYPE html><html><head><title>404 Not Found</title></head><body><h1>404 - 页面未找到</h1><p>请求的页面不存在</p></body></html>";
+        }
+        return html404;
     }
 
     private static final int BUFFER_SIZE = 1024 * 1024;
@@ -472,10 +505,21 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
     private static final byte CR = 0x0d;
 
     private void outputHtml(String html, String responseCode) {
+        if (html == null) {
+            html = "<!DOCTYPE html><html><head><title>错误</title></head><body><h1>内容为空</h1></body></html>";
+        }
+
         String startLine = "HTTP/1.1 " + responseCode;
         List<String> responseHeaders = new ArrayList<>();
         responseHeaders.add("Content-Type: text/html; charset=UTF-8");
         responseHeaders.add(String.format(Locale.getDefault(), "Content-Length: %d", html.getBytes().length));
+        // 添加防止缓存的头部
+        responseHeaders.add("Cache-Control: no-cache, no-store, must-revalidate");
+        responseHeaders.add("Pragma: no-cache");
+        responseHeaders.add("Expires: 0");
+        // 添加连接管理头部
+        responseHeaders.add("Connection: close");
+
         StringBuilder builder = new StringBuilder();
         builder.append(startLine).append(new String(new byte[]{CR, LF}));
         for (String responseHeader : responseHeaders) {

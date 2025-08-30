@@ -167,7 +167,7 @@ public class MainActivity extends Activity {
         LinearLayout linearLayout = findViewById(R.id.ll);
         EditText e1 = findViewById(R.id.e1);
         EditText e2 = findViewById(R.id.e2);
-        Switch s1, s2, s3, s4, s5, s6, s7, s8;
+        Switch s1, s2, s3, s4, s5, s6, s7, s8, s9;
         s1 = findViewById(R.id.s1);
         s2 = findViewById(R.id.s2);
         s3 = findViewById(R.id.s3);
@@ -176,6 +176,7 @@ public class MainActivity extends Activity {
         s6 = findViewById(R.id.s6);
         s7 = findViewById(R.id.s7);
         s8 = findViewById(R.id.s8);
+        s9 = findViewById(R.id.s9);
         final String setting = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
         s1.setChecked(setting != null && setting.contains(getPackageName()));
         s2.setChecked(sp.getBoolean("float", true));
@@ -185,6 +186,7 @@ public class MainActivity extends Activity {
         s6.setChecked(sp.getBoolean("shake", false));
         s7.setChecked(sp.getBoolean("volume", false));
         s8.setChecked(sp.getBoolean("net", false));
+        s9.setChecked(sp.getBoolean("auto_start", false));
         s3.setEnabled(s2.isChecked());
         s4.setEnabled(s2.isChecked());
         s5.setEnabled(s2.isChecked());
@@ -258,6 +260,12 @@ public class MainActivity extends Activity {
                 else ((TextView) findViewById(R.id.title_text)).setText(R.string.shortcutoff);
             }
             sp.edit().putBoolean("net", b).apply();
+        });
+        s9.setOnCheckedChangeListener((compoundButton, b) -> {
+            sp.edit().putBoolean("auto_start", b).apply();
+            if (b) {
+                Toast.makeText(MainActivity.this, "开机自启动已开启，重启后生效", Toast.LENGTH_SHORT).show();
+            }
         });
         if (s1.isChecked() && s8.isChecked()) showNet();
         sb.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
