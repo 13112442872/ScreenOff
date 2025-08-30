@@ -136,6 +136,12 @@
                         android:layout_height="wrap_content"
                         android:text="@string/net_ctl" />
 
+                    <Switch
+                        android:id="@+id/s9"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/auto_start" />
+
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
