@@ -274,13 +274,18 @@ public class GlobalService extends AccessibilityService implements SharedPrefere
         filter.addAction(Intent.ACTION_SCREEN_ON);
         filter.addAction(Intent.ACTION_USER_PRESENT);
         filter.addAction("action.ScrOff");
-        filter.addAction("intent.screenoff.sendBinder");
         filter.addAction("intent.screenoff.exit");
+
+        IntentFilter filterExported = new IntentFilter("intent.screenoff.sendBinder");
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(myReceiver, new IntentFilter("intent.screenoff.sendBinder"), RECEIVER_EXPORTED);
+            registerReceiver(myReceiver, filter, RECEIVER_NOT_EXPORTED);
+            registerReceiver(myReceiver, filterExported, RECEIVER_EXPORTED);
         } else {
-            registerReceiver(myReceiver, new IntentFilter("intent.screenoff.sendBinder"));
+            registerReceiver(myReceiver, filter);
+            registerReceiver(myReceiver, filterExported);
         }
+
         sp.registerOnSharedPreferenceChangeListener(this);
     }
 
